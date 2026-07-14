@@ -1,0 +1,39 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21 },
+  "configurePresets": [
+    {
+      "name": "rp2040-zero",
+      "displayName": "Waveshare RP2040-Zero",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PICO_BOARD": "waveshare_rp2040_zero",
+        "GCCA_JOYBUS_GPIO_CH0": "29",
+        "GCCA_JOYBUS_GPIO_CH1": "28",
+        "GCCA_JOYBUS_GPIO_CH2": "27",
+        "GCCA_JOYBUS_GPIO_CH3": "26"
+      }
+    },
+    {
+      "name": "rp2350-zero",
+      "displayName": "Waveshare RP2350-Zero",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PICO_BOARD": "waveshare_rp2350_zero",
+        "PICO_PLATFORM": "rp2350",
+        "GCCA_JOYBUS_GPIO_CH0": "29",
+        "GCCA_JOYBUS_GPIO_CH1": "28",
+        "GCCA_JOYBUS_GPIO_CH2": "27",
+        "GCCA_JOYBUS_GPIO_CH3": "26"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "rp2040-zero", "configurePreset": "rp2040-zero" },
+    { "name": "rp2350-zero", "configurePreset": "rp2350-zero" }
+  ]
+}

@@ -1,0 +1,17 @@
+menu "Joybus Adapter"
+    config GCCA_JOYBUS_GPIO_CH0
+        int "Joybus data GPIO — channel 0"
+        default 1
+
+    config GCCA_JOYBUS_GPIO_CH1
+        int "Joybus data GPIO — channel 1"
+        default 2
+
+    config GCCA_JOYBUS_GPIO_CH2
+        int "Joybus data GPIO — channel 2"
+        default 3
+
+    config GCCA_JOYBUS_GPIO_CH3
+        int "Joybus data GPIO — channel 3"
+        default 4
+endmenu

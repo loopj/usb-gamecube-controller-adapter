@@ -1,0 +1,17 @@
+# Build output
+build/
+
+# Python virtualenv (tools/)
+.venv/
+__pycache__/
+
+# Editor / tooling
+.cache/
+compile_commands.json
+
+
+# ESP-IDF build output
+sdkconfig
+sdkconfig.old
+dependencies.lock
+managed_components/
