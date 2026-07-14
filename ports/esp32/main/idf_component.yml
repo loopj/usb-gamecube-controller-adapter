@@ -1,0 +1,5 @@
+dependencies:
+  # Use the vendored libjoybus at the repo root (lib/libjoybus)
+  libjoybus:
+    path: ../../../lib/libjoybus
+  espressif/esp_tinyusb: "^2.0.0"

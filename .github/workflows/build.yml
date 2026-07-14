@@ -1,0 +1,147 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PICO_SDK_VERSION: 2.2.0
+  PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+
+jobs:
+  # Cache the Pico SDK once so the matrix jobs only restore, never racing to save.
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache Pico SDK
+        id: cache-pico-sdk
+        uses: actions/cache@v5
+        with:
+          path: pico-sdk
+          key: pico-sdk-${{ env.PICO_SDK_VERSION }}
+
+      - name: Install Pico SDK
+        if: steps.cache-pico-sdk.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch ${{ env.PICO_SDK_VERSION }} \
+            --recurse-submodules --shallow-submodules \
+            https://github.com/raspberrypi/pico-sdk.git pico-sdk
+
+  # Waveshare RP2040-Zero and RP2350-Zero (Pico SDK).
+  build-rp2xxx:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [rp2040-zero, rp2350-zero]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3 build-essential \
+            gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+
+      - name: Restore Pico SDK
+        uses: actions/cache/restore@v5
+        with:
+          path: pico-sdk
+          key: pico-sdk-${{ env.PICO_SDK_VERSION }}
+          fail-on-cache-miss: true
+
+      # Board selection + Joybus pin map live in rp2xxx/CMakePresets.json.
+      - name: Build
+        working-directory: ports/rp2xxx
+        run: |
+          cmake --preset ${{ matrix.board }}
+          cmake --build --preset ${{ matrix.board }}
+
+      - name: Stage artifact
+        working-directory: ports/rp2xxx
+        run: cp build/${{ matrix.board }}/gcn-usb-adapter.uf2 gcn-usb-adapter-${{ matrix.board }}.uf2
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcn-usb-adapter-${{ matrix.board }}
+          path: ports/rp2xxx/gcn-usb-adapter-${{ matrix.board }}.uf2
+          if-no-files-found: error
+
+  # ESP32 boards (ESP-IDF). USB HID needs native USB-OTG (ESP32-S2/S3/P4).
+  build-esp32:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { board: esp32-s3-zero, target: esp32s3 }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      # The esp-idf-ci-action builds inside the pinned espressif/idf Docker image, so it
+      # carries its own toolchain and needs no SDK cache. Board config (target + Joybus pins)
+      # lives in esp32/boards/<board>.defaults, layered over the common sdkconfig.defaults.
+      # The boot chain is merged into a single image flashable at 0x0.
+      - name: Build
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: release-v6.0
+          target: ${{ matrix.target }}
+          path: ports/esp32
+          command: >-
+            idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;boards/${{ matrix.board }}.defaults" build &&
+            idf.py merge-bin -o gcn-usb-adapter-${{ matrix.board }}.bin
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcn-usb-adapter-${{ matrix.board }}
+          path: |
+            ports/esp32/build/gcn-usb-adapter-${{ matrix.board }}.bin
+            ports/esp32/build/gcn-usb-adapter.bin
+            ports/esp32/build/bootloader/bootloader.bin
+            ports/esp32/build/partition_table/partition-table.bin
+            ports/esp32/build/flasher_args.json
+          if-no-files-found: error
+
+  # Publish binaries: a rolling "trunk" prerelease on every main push, and a
+  # draft release on v* tags. (Skipped on PRs and manual runs.)
+  release:
+    needs: [build-rp2xxx, build-esp32]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'trunk' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'Trunk (latest main build)' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          draft: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          generate_release_notes: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/gcn-usb-adapter-rp2040-zero/gcn-usb-adapter-rp2040-zero.uf2
+            dist/gcn-usb-adapter-rp2350-zero/gcn-usb-adapter-rp2350-zero.uf2
+            dist/gcn-usb-adapter-esp32-s3-zero/gcn-usb-adapter-esp32-s3-zero.bin

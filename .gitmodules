@@ -1,0 +1,4 @@
+[submodule "lib/libjoybus"]
+	path = lib/libjoybus
+	url = git@github.com:loopj/libjoybus.git
+	branch = main
